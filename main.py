@@ -292,10 +292,10 @@ def mainProject(project_conf: dict) :
 
 	COMMANDS = {}
 
-	todos = project_conf["todo"]
-	if len(todos) > 0 :
-		todos.sort(key=lambda x: -x["points"])
-		say(bold(f"Next todo: {todos[0]["label"]}"))
+	not_done = [x for x in project_conf["todo"] if not x["completed"]]
+	if len(not_done) > 0 :
+		not_done.sort(key=lambda x: -x["points"])
+		say(bold(f"Next todo: {not_done[0]["label"]}"))
 
 	@addToCommands(COMMANDS)
 	def run_cmd() :
@@ -483,7 +483,7 @@ def open_project(project_dir: str) :
 	for i in conf["projects"] :
 		if i["dir"] == canonical(project_dir) :
 			settings = i
-		if i["name"] == project_dir :
+		if i["name"].lower() == project_dir.lower() :
 			possible.append(i)
 
 	if settings == None :
