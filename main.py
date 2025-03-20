@@ -418,7 +418,7 @@ def mainProject(project_conf: dict) :
 		if action == "push" :
 			msg = ask("Commit message:")
 
-			os.system(f"cd {project_dir} && git add . && git commit -m {msg} && git push")
+			os.system(f"cd {project_dir} && git add . && git commit -m \"{msg}\" && git push")
 
 		return 0
 
