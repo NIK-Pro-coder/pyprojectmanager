@@ -53,7 +53,7 @@ def formatJson(obj: Any, depth: int = 0) -> str :
 	return string
 
 def printJson(obj: Any) :
-	print(formatJson(obj))
+	say(formatJson(obj))
 
 def canonical(path: str) -> str : return path if path.startswith("/") else HOME + "/" + path
 
@@ -84,14 +84,14 @@ def askPossible(query: str, possible: list[str]) -> str :
 	if got in possible :
 		return got
 
-	fil = [x for x in possible if x.lower().startswith(got.lower())]
+	fil = [x for x in possible if got.lower() in x.lower()]
 
 	if len(fil) > 0 and got != "" :
 		if len(fil) == 1 :
 			say(f"Selected: '{fil[0]}'")
 			return fil[0]
 
-		print(fil)
+		say(str(fil))
 		error(f"Possible matches: '{"', '".join(fil)}'")
 		return askPossible(query, possible)
 
@@ -217,8 +217,12 @@ def showFuncUsage(fn: Callable) :
 	error(f"> {fn.__name__[:fn.__name__.find("_")]} [{"] [".join(req)}]")
 
 def commmandGetter(commands: dict[str, Callable]) :
-	print(f"Posible commands: '{"', '".join(list(commands.keys()))}'")
-	spl = ask(">").split()
+	say(f"Posible commands: '{"', '".join(list(commands.keys()))}'")
+	try :
+		spl = ask(">").split()
+	except KeyboardInterrupt :
+		exit(0)
+
 	cmd, inp = spl[0], spl[1:]
 
 	if cmd in commands :
@@ -283,10 +287,15 @@ def mainProject(project_conf: dict) :
 	if on_load != None :
 		cmd = f"cd {project_dir} && " + on_load.replace("$t", project_dir)
 
-		print(f"Runing '{cmd}'")
+		say(f"Runing '{cmd}'")
 		os.system(cmd)
 
 	COMMANDS = {}
+
+	todos = project_conf["todo"]
+	if len(todos) > 0 :
+		todos.sort(key=lambda x: -x["points"])
+		say(bold(f"Next todo: {todos[0]["label"]}"))
 
 	@addToCommands(COMMANDS)
 	def run_cmd() :
@@ -313,7 +322,7 @@ def mainProject(project_conf: dict) :
 		cmd = run.replace("$x", project_conf["dir"] + "/" + main)
 		cmd = f"cd {project_dir} && " + cmd
 
-		print(f"Runing '{cmd}'")
+		say(f"Runing '{cmd}'")
 		os.system(cmd)
 
 		return 0
@@ -348,7 +357,7 @@ def mainProject(project_conf: dict) :
 
 				fn = success if total == gotten else say
 
-				fn(f"{int(perc*100):>3}% [{"#"*int(perc*20):-<20}]")
+				fn(f"{int(perc*100):>3}% [{"#"*int(perc*20):-<20}] {gotten}/{total}")
 			else :
 				say("No todos defined")
 
@@ -449,7 +458,7 @@ def mainProject(project_conf: dict) :
 
 		cmd = f"cd {project_dir} && " + cmd.replace("$x", package_name).replace("$t", project_dir)
 
-		print(f"Runing '{cmd}'")
+		say(f"Runing '{cmd}'")
 		os.system(cmd)
 
 		return 0
@@ -470,9 +479,24 @@ ACTIONS = {}
 @addToCommands(ACTIONS)
 def open_project(project_dir: str) :
 	settings = None
+	possible = []
 	for i in conf["projects"] :
 		if i["dir"] == canonical(project_dir) :
 			settings = i
+		if i["name"] == project_dir :
+			possible.append(i)
+
+	if settings == None :
+		if len(possible) == 1 :
+			settings = possible[0]
+		elif len(possible) > 1 :
+			say(f"There are multiple projects named '{project_dir}'")
+			for n,i in enumerate(possible) :
+				say(f" {n+1}. {i["dir"]}")
+			pid = 0
+			while pid < 1 or pid > len(possible) :
+				pid = askAsFunc("Which one to open?", int)
+			settings = possible[pid-1]
 
 	if settings != None :
 		mainProject(settings)
@@ -534,13 +558,66 @@ def register_project(project_dir: str) :
 
 	open_project(path)
 
+@addToCommands(ACTIONS)
+def create_project() :
+
+	correct = False
+
+	while not correct :
+		lang = askPossible("Project lang:", list(conf["languages"].keys()))
+		name = ask("Project name:")
+		escaped = name.lower().replace(" ", "_")
+		name = "<not set>" if name == "" else name
+
+		desc = ask("Project description:")
+		desc = "<not set>" if desc == "" else desc
+
+		lang_ext = conf["languages"][lang]["extension"]
+		main = ask(f"Main entry point (default: main{lang_ext}):")
+		main = f"main{lang_ext}" if main == "" else main
+
+		dir = ask("Project parent dir:")
+		path = canonical(dir.rstrip("/") + "/" + escaped)
+
+		meta = {
+			"dir": path,
+			"lang": lang,
+			"name": name,
+			"desc": desc,
+			"todo": [],
+			"main": main
+		}
+
+		printJson(meta)
+		correct = askYesNo("Is this correct?")
+
+	os.mkdir(path)
+	with open(path + "/" + main, "w") as f :
+		pass
+
+	on_create = conf["languages"][lang]["create"]
+	if on_create == None :
+		error(f"{lang} does not have an on-create command defined")
+		on_create = ask("On-create command:")
+
+	if on_create != "" :
+		cmd = f"cd {path} && " + on_create
+		say(f"running '{cmd}'")
+		os.system(cmd)
+
+	conf["projects"].append(meta)
+
+	editConfigFile("projects", conf["projects"])
+
+	open_project(path)
+
 args = sys.argv[1:]
 
 if len(args) > 0 :
 	act, inp = args[0], args[1:]
 
 	if not act in ACTIONS :
-		print(f"Unknown action: '{act}'")
+		say(f"Unknown action: '{act}'")
 		exit(1)
 
 	fn = ACTIONS[act]
