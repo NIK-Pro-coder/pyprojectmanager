@@ -415,6 +415,11 @@ def mainProject(project_conf: dict) :
 
 			os.system(f"cd {project_dir} && git remote add origin {link} && git branch -M main && git add . && git commit -m \"First Commit\" && git push --set-upstream origin main")
 
+		if action == "push" :
+			msg = ask("Commit message:")
+
+			os.system(f"cd {project_dir} && git add . && git commit -m {msg} && git push")
+
 		return 0
 
 	@addToCommands(COMMANDS)
