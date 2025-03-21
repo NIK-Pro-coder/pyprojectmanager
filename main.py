@@ -623,9 +623,38 @@ if not isfile(".config/project-manager/settings.json") :
 		with open(canonical(".config/project-manager/settings.json"), "w") as f :
 			json.dump(blankConfig(), f)
 
+def convertTo2(proj_conf: dict) -> dict :
+
+	ideas = []
+	for i in proj_conf["ideas"] :
+		ideas.append({
+			"name": i["name"],
+			"desc": i["desc"],
+			"proj": None
+		})
+
+	new = proj_conf.copy()
+
+	new["ideas"] = ideas
+	new["version"] = 2
+
+	return new
+
+CONVERTERS: dict[int, Callable] = {
+	2: convertTo2
+}
+
 def loadConfig() -> dict :
 	with open(canonical(".config/project-manager/settings.json")) as f :
 		config = json.load(f)
+
+	for i in CONVERTERS :
+		version = config["version"]
+		if version < i :
+			say(f"Converting from config version {version} to version {i}")
+			config = CONVERTERS[i](config)
+			with open(canonical(".config/project-manager/settings.json"), "w") as f :
+				json.dump(config, f)
 
 	return config
 
@@ -1205,7 +1234,67 @@ def template_manager(action: str) :
 
 	return 0
 
-say("Checking projects")
+@addToCommands(ACTIONS)
+def idea_manager(action: str) :
+	if not action in ["add", "list", "rm", "mark"] :
+		error(f"Unknown action: {action}")
+		say("Possible actions: 'list', 'add', 'rm', 'mark'2")
+		return 0
+
+	if action == "list" :
+		if len(conf["ideas"]) > 0 :
+			for i in conf["ideas"] :
+				fn = say if i["proj"] == None else success
+				fn(f"- {i["name"]}" + (f" ({i["proj"]})" if i["proj"] else ""))
+				fn(f"   {i["desc"]}")
+		else :
+			say("No ideas")
+
+	if action == "mark" :
+		idea = askPossible("Idea name:", [x["name"] for x in conf["ideas"]])
+		proj = askPossible("Project dir:", [x["dir"].removeprefix(HOME + "/") for x in conf["projects"]])
+
+		for i in conf["ideas"] :
+			if i["name"] == idea :
+				i["proj"] = canonical(proj)
+		editConfigFile(
+			"ideas",
+			conf["ideas"]
+		)
+
+	if action == "add" :
+		name = ask("Idea name:")
+		desc = ask("Idea description:")
+
+		meta = {
+			"name": name,
+			"desc": desc,
+			"proj": None
+		}
+
+		conf["ideas"].append(meta)
+
+		editConfigFile(
+			"ideas",
+			conf["ideas"]
+		)
+
+	if action == "rm" :
+		name = askPossible("Idea name:", [x["name"] for x in conf["ideas"]])
+
+		for n,i in enumerate(conf["ideas"]) :
+			if i["name"] == name :
+				conf["ideas"].pop(n)
+				break
+
+		editConfigFile(
+			"ideas",
+			conf["ideas"]
+		)
+
+	return 0
+
+before = len(conf["projects"])
 for n,i in enumerate(conf["projects"]) :
 	print(f"Checking '{i["name"]}'                          ", end = "\r")
 	if not isdir(i["dir"]) :
@@ -1215,6 +1304,7 @@ for n,i in enumerate(conf["projects"]) :
 			"projects",
 			conf["projects"]
 		)
+say(f"Removed {before - len(conf['projects'])} projects                            ")
 
 args = sys.argv[1:]
 
