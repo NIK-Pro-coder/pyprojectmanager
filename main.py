@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os, json, sys, time, random
 
 from pathlib import Path
@@ -912,6 +914,9 @@ def mainProject(project_conf: dict) :
 
 ACTIONS = {}
 
+def isProject(path: str) :
+	return any(x["dir"] == path for x in conf["projects"])
+
 @addToCommands(ACTIONS)
 def open_project(project_dir: str) :
 	settings = None
@@ -919,7 +924,7 @@ def open_project(project_dir: str) :
 	for i in conf["projects"] :
 		if i["dir"] == canonical(project_dir) :
 			settings = i
-		if i["name"].lower() == project_dir.lower() :
+		if i["name"].lower().startswith(project_dir.lower()) :
 			possible.append(i)
 
 	if settings == None :
@@ -996,8 +1001,7 @@ def register_project(project_dir: str) :
 
 	return open_project(path)
 
-@addToCommands(ACTIONS)
-def create_project() :
+def createNoTempl() :
 
 	correct = False
 
@@ -1029,6 +1033,10 @@ def create_project() :
 		printJson(meta)
 		correct = askYesNo("Is this correct?")
 
+	if isProject(path) :
+		error(f"'{path}' is already a project")
+		return 0
+
 	os.mkdir(path)
 	with open(path + "/" + main, "w") as f :
 		pass
@@ -1048,6 +1056,99 @@ def create_project() :
 	editConfigFile("projects", conf["projects"])
 
 	return open_project(path)
+
+def copyDir(path: str, target: str) :
+	say(f"Copying '{path}' -> '{target}'")
+
+	ins = os.listdir(path)
+
+	for i in ins :
+		f = path + "/" + i
+		if os.path.isfile(f) :
+			with open(target + "/" + i, "w") as w :
+				with open(f) as r :
+					w.write(r.read())
+		else :
+			copyDir(f, target + "/" + i)
+
+def createYesTempl() :
+	correct = False
+
+	while not correct :
+		templ_name = askPossible("Template name:", list(conf["templates"].keys()))
+		templ = conf["templates"][templ_name]
+
+		name = ask("Project name:")
+		escaped = name.lower().replace(" ", "_")
+		name = "<not set>" if name == "" else name
+
+		desc = ask("Project description:")
+		desc = "<not set>" if desc == "" else desc
+
+		dir = ask("Project parent dir:")
+		path = canonical(dir.rstrip("/") + "/" + escaped) if dir != "" else HOME + "/" + escaped
+
+		meta = {
+			"dir": path,
+			"lang": templ["lang"],
+			"name": name,
+			"desc": desc,
+			"todo": [],
+			"main": templ["main"]
+		}
+
+		printJson(meta)
+
+		correct = askYesNo("Is this correct")
+
+	if isProject(path) :
+		error(f"'{path}' is already a project")
+		return 0
+
+	os.mkdir(path)
+	copyDir(templ["dir"], path)
+
+	create = conf["languages"][templ["lang"]]["create"]
+	if create == None :
+		error(f"Lang {templ["lang"]} has no on-create command")
+		create = ask("Command:")
+
+	if create != "" :
+		cmd = f"cd {path} && " + create.replace("$t", path)
+		say(f"Running '{cmd}'")
+		os.system(cmd)
+
+	for i in templ["packages"] :
+		pack = conf["languages"][templ["lang"]]["packages"]
+		cmd = pack["add"]
+		if cmd == None :
+			error(f"{templ["lang"]}'s package manager does not have an add command defined")
+			cmd = ask(f"Command to add a package $x:")
+			pack["add"] = cmd
+			editLang(
+				templ["lang"],
+				"packages",
+				pack
+			)
+
+		cmd = f"cd {path} && " + cmd.replace("$x", i).replace("$t", path)
+		say(f"Running '{cmd}'")
+		os.system(cmd)
+
+	conf["projects"].append(meta)
+
+	editConfigFile("projects", conf["projects"])
+
+	return open_project(path)
+
+@addToCommands(ACTIONS)
+def create_project() :
+	if len(conf["templates"]) > 0 :
+		templ = askYesNo("Would you like to use a template?")
+		if templ :
+			return createYesTempl()
+
+	return createNoTempl()
 
 @addToCommands(ACTIONS)
 def template_manager(action: str) :
@@ -1103,6 +1204,17 @@ def template_manager(action: str) :
 		)
 
 	return 0
+
+say("Checking projects")
+for n,i in enumerate(conf["projects"]) :
+	print(f"Checking '{i["name"]}'                          ", end = "\r")
+	if not isdir(i["dir"]) :
+		error(f"Directory '{i["dir"]}' does not exist, removing project")
+		conf["projects"].pop(n)
+		editConfigFile(
+			"projects",
+			conf["projects"]
+		)
 
 args = sys.argv[1:]
 
