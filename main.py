@@ -624,7 +624,6 @@ if not isfile(".config/project-manager/settings.json") :
 			json.dump(blankConfig(), f)
 
 def convertTo2(proj_conf: dict) -> dict :
-
 	ideas = []
 	for i in proj_conf["ideas"] :
 		ideas.append({
@@ -640,8 +639,24 @@ def convertTo2(proj_conf: dict) -> dict :
 
 	return new
 
+def convertTo3(proj_conf: dict) -> dict :
+	projects = []
+	for i in proj_conf["projects"] :
+		p = i.copy()
+		p["longdesc"] = None
+
+		projects.append(p)
+
+	new = proj_conf.copy()
+
+	new["projects"] = projects
+	new["version"] = 3
+
+	return new
+
 CONVERTERS: dict[int, Callable] = {
-	2: convertTo2
+	2: convertTo2,
+	3: convertTo3,
 }
 
 def loadConfig() -> dict :
@@ -892,6 +907,8 @@ def mainProject(project_conf: dict) :
 		if action == "push" :
 			msg = ask("Commit message:")
 
+			generateReadme(project_conf)
+
 			os.system(f"cd {project_dir} && git add . && git commit -m \"{msg}\" && git push")
 
 			giveMotivation()
@@ -946,6 +963,29 @@ ACTIONS = {}
 def isProject(path: str) :
 	return any(x["dir"] == path for x in conf["projects"])
 
+def generateReadme(project: dict) :
+	string = f"""
+# {project['name']}
+#### {project['desc']}
+
+---
+
+{project['longdesc'].strip()}
+
+---
+
+### Todos:
+"""
+	if len(project["todo"]) > 0 :
+		for i in project["todo"] :
+			string += f" - [{'x' if i["completed"] else ' '}] {i["label"]}\n"
+	else :
+		string += "No todos\n"
+
+
+	with open(project["dir"] + "/README.md", "w") as f :
+		f.write(string.strip())
+
 @addToCommands(ACTIONS)
 def open_project(project_dir: str) :
 	settings = None
@@ -970,6 +1010,19 @@ def open_project(project_dir: str) :
 
 	if settings != None :
 		giveMotivation()
+		if isfile(settings["dir"] + "/desc.md") :
+			with open(settings["dir"] + "/desc.md") as f :
+				editMetaFile(
+					settings,
+					"longdesc",
+					f.read()
+				)
+		if settings["longdesc"] == None :
+			say(f"{settings["name"]} has no long description")
+			cr = askYesNo("Would you like to create a desc.md for the description?")
+			if cr :
+				with open(settings["dir"] + "/desc.md", "w") as f :
+					f.write("[Put your description here]")
 		mainProject(settings)
 		return 1
 
@@ -1325,6 +1378,5 @@ if len(args) > 0 :
 
 	fn(*inp)
 
-keep = 0
-while keep == 0 :
-	keep = commmandGetter(ACTIONS)
+while True :
+	commmandGetter(ACTIONS)

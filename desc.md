@@ -1,8 +1,3 @@
-# PyProjectManager reborn
-#### The second version of PyProjectManager
-
----
-
 *PyProjectManager Reborn* is a "little" python script that was made to help unorganized people like me organize their projects.
 
 *PyProjectManager Reborn* also offers a few useful features to speed up development, like the ability to create projects using predefined templates or an easy and conveniente way to manage dependencies with the `pack` command.
@@ -12,14 +7,3 @@
 *PyProjectManager Reborn* has the ability to handle a project's todos with the `todo` command allowing for the creation, removal and checking of todos.
 
 *PyProjectManager Reborn* abstracts wersion control using git, it handles committing to a repository and linking repositories, it also automatically generates README.md from project metadata
-
----
-
-### Todos:
- - [x] Project creation
- - [x] Add back motivation
- - [x] Creat with template
- - [x] Template management
- - [x] Session goals
- - [x] Idea management
- - [ ] README.md generation
